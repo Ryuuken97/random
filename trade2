@@ -6,8 +6,12 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local HttpService = game:GetService("HttpService")
 local workspace = game:GetService("Workspace")
-local VirtualUser = game:GetService("VirtualUser") -- Ditambahkan untuk Anti-AFK
+local VirtualUser = game:GetService("VirtualUser")
+local TeleportService = game:GetService("TeleportService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
 
+-- Pemuatan WindUI
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -16,23 +20,7 @@ local net = ReplicatedStorage:WaitForChild("Packages")
 	:WaitForChild("sleitnick_net@0.2.0")
 	:WaitForChild("net")
 
-local Notifs = {} -- Dibuat kosong karena flag notif yang lama tidak relevan lagi
-
--- Anti-AFK Bawaan Dibiarkan Aktif
-LocalPlayer.Idled:Connect(function()
-    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-end)
-
-for i,v in next, getconnections(game:GetService("Players").LocalPlayer.Idled) do
-    v:Disable()
-end
-
-
--- =========================================================
 -- [ NOTIFICATION FUNCTIONS ]
--- =========================================================
 
 local function NotifySuccess(title, message, duration)
 	WindUI:Notify({
@@ -70,13 +58,38 @@ local function NotifyWarning(title, message, duration)
 	})
 end
 
+-- [ UTILITY & SETUP ]
+
+-- Anti-AFK Bawaan
+LocalPlayer.Idled:Connect(function()
+    VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    task.wait(1)
+    VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+end)
+
+for i,v in next, getconnections(game:GetService("Players").LocalPlayer.Idled) do
+    v:Disable()
+end
+
+-- Teleport Reconnect
+local PlaceId = game.PlaceId
+local function AutoReconnect()
+    while task.wait(5) do
+        if not Players.LocalPlayer or not Players.LocalPlayer:IsDescendantOf(game) then
+            TeleportService:Teleport(PlaceId)
+        end
+    end
+end
+task.spawn(AutoReconnect)
+
+
 -- =========================================================
 -- [ UI SETUP ]
 -- =========================================================
 
 local Window = WindUI:CreateWindow({
 	Title = "Trade & Teleport",
-	Icon = "hop",
+	Icon = "handshake",
 	Author = "by dio",
 	Size = UDim2.fromOffset(400, 450),
 	Transparent = true,
@@ -90,11 +103,36 @@ local TradeTab = Window:Tab({
 	Icon = "handshake",
 })
 
--- FishTab Dihapus karena fokus hanya Trade/Teleport
--- local FishTab = Window:Tab({
--- 	Title = "Auto Fishing",
--- 	Icon = "fish"
--- })
+local SettingsTab = Window:Tab({ 
+	Title = "Settings", 
+	Icon = "cog" 
+})
+
+local ConfigManager = Window.ConfigManager
+local myConfig = ConfigManager:CreateConfig("QuietXTradeConfig")
+
+-- [ KONFIRMASI AWAL ]
+local confirmed = false
+WindUI:Popup({
+    Title = "Important!",
+    Icon = "rbxassetid://129260712070622",
+    Content = [[
+Trade Module Loaded!
+]],
+    Buttons = {
+        { Title = "Close", Variant = "Secondary", Callback = function() end },
+        { Title = "Next", Variant = "Primary", Callback = function() confirmed = true end },
+    }
+})
+
+repeat task.wait() until confirmed
+
+WindUI:Notify({
+	Title = "dionendrahub Trade Module",
+	Content = "Trade Features Loaded!",
+	Duration = 5,
+	Image = "square-check-big"
+})
 
 -- =========================================================
 -- [ TELEPORT FUNCTION ]
@@ -201,7 +239,7 @@ TradeTab:Toggle({
 	end,
 })
 
--- KODE NAME CALL HOOK YANG DIMODIFIKASI
+-- KODE NAME CALL HOOK YANG DIPERKUAT
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
 setreadonly(mt, false)
@@ -225,17 +263,29 @@ mt.__namecall = newcclosure(function(self, ...)
 
 		-- Mode Trade (Single Item, HARUS EQUIP DULU)
 		elseif TradeFunction.onTrade then
+			
+            if not TradeFunction.targetUserId then
+                NotifyError("Trade Failed", "No trade target selected (dropdown is 'None').")
+                return nil
+            end
+            
 			-- 1. Jalankan remote call aslinya (Ini yang akan meng-equip item)
 			local result = oldNamecall(self, unpack(args))
 			task.wait(0.1) -- Tunggu sebentar setelah equip terjadi
 
 			-- 2. Lanjutkan dengan mengirim trade
-			if uuid and TradeFunction.targetUserId then
-				InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
-				local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
-				NotifySuccess("Trade Sent", "Trade sent to " .. (targetPlayer and targetPlayer.Name or "Target") .. "!")
+			if uuid then
+                local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
+                
+                -- Memastikan target player valid sebelum InvokeServer
+                if targetPlayer then
+                    InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
+                    NotifySuccess("Trade Sent", "Trade sent to " .. targetPlayer.Name .. "!")
+                else
+                    NotifyError("Trade Failed", "Target player left the server.")
+                end
 			else
-				NotifyError("Trade Error", "Invalid target or item.")
+				NotifyError("Trade Failed", "Invalid item UUID.")
 			end
 			return result -- Kembalikan nilai asli.
 		end
@@ -245,7 +295,7 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 
 setreadonly(mt, true)
--- AKHIR KODE NAME CALL HOOK YANG DIMODIFIKASI
+-- AKHIR KODE NAME CALL HOOK YANG DIPERKUAT
 
 local function TradeAll()
 	if TradeFunction.tradingInProgress then
@@ -349,11 +399,17 @@ TradeTab:Toggle({
 	end,
 })
 
+local OTBlockNotif = true -- Digunakan untuk memblokir notifikasi toggle pertama
+
 TradeTab:Toggle({
 	Title = "Trade (Single Item)",
 	Desc = "Click an inventory item to send trade instantly (Requires item to be equipped first)",
 	Value = false,
 	Callback = function(state)
+		if OTBlockNotif then
+			OTBlockNotif = false
+			return
+		end
 		TradeFunction.onTrade = state
 		if state then
 			NotifySuccess("Trade Mode Active", "Click an item to equip and send trade.")
@@ -384,4 +440,150 @@ TradeTab:Toggle({
 			NotifyWarning("Auto Accept Trade", "Disabled")
 		end
 	end,
+})
+
+-- =========================================================
+-- [ SETTINGS TAB ]
+-- =========================================================
+
+local AFKBN = true -- Untuk memblokir notifikasi toggle pertama
+local AFKConnection = nil
+local TeleportService = game:GetService("TeleportService")
+
+SettingsTab:Toggle({
+	Title = "Anti-AFK",
+	Value = true,
+	Callback = function(Value)
+		if AFKBN then
+			AFKBN = false
+			return
+		end
+  
+		if Value then
+			-- Mengaktifkan kembali fungsi Idled bawaan di awal skrip
+            LocalPlayer.Idled:Connect(function()
+                VirtualUser:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+                task.wait(1)
+                VirtualUser:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+            end)
+			NotifySuccess("Anti-AFK Activated", "You will now avoid being kicked.")
+		else
+			-- Menonaktifkan koneksi Idled
+            for i,v in next, getconnections(game:GetService("Players").LocalPlayer.Idled) do
+                v:Disable()
+            end
+			NotifySuccess("Anti-AFK Deactivated", "You can now go idle again.")
+		end
+	end,
+})
+
+SettingsTab:Button({
+	Title = "Boost FPS (Maximize Performance)",
+	Callback = function()
+		for _, v in pairs(game:GetDescendants()) do
+			if v:IsA("BasePart") then
+				v.Material = Enum.Material.SmoothPlastic
+				v.Reflectance = 0
+			elseif v:IsA("Decal") or v:IsA("Texture") then
+				v.Transparency = 1
+			end
+		end
+
+		local Lighting = game:GetService("Lighting")
+		for _, effect in pairs(Lighting:GetChildren()) do
+			if effect:IsA("PostEffect") then
+				effect.Enabled = false
+			end
+		end
+
+		Lighting.GlobalShadows = false
+		Lighting.FogEnd = 1e10
+
+		settings().Rendering.QualityLevel = Enum.QualityLevel.Level01
+        NotifyInfo("FPS Boost", "Performance settings applied.")
+	end
+})
+
+local function Rejoin()
+	local player = Players.LocalPlayer
+	if player then
+		TeleportService:Teleport(game.PlaceId, player)
+	end
+end
+
+local function ServerHop()
+	local placeId = game.PlaceId
+	local servers = {}
+	local cursor = ""
+
+	repeat
+		local url = "https://games.roblox.com/v1/games/"..placeId.."/servers/Public?sortOrder=Asc&limit=100"
+		if cursor ~= "" then
+			url = url .. "&cursor=" .. cursor
+		end
+
+		local success, result = pcall(function()
+			return HttpService:JSONDecode(game:HttpGet(url))
+		end)
+
+		if success and result and result.data then
+			for _, server in pairs(result.data) do
+				if server.playing < server.maxPlayers and server.id ~= game.JobId then
+					table.insert(servers, server.id)
+				end
+			end
+			cursor = result.nextPageCursor or ""
+		else
+			break
+		end
+	until not cursor or #servers > 0
+
+	if #servers > 0 then
+		local targetServer = servers[math.random(1, #servers)]
+		TeleportService:TeleportToPlaceInstance(placeId, targetServer, LocalPlayer)
+	else
+		NotifyError("Server Hop Failed", "No servers available or all are full!")
+	end
+end
+
+local Keybind = SettingsTab:Keybind({
+    Title = "Keybind",
+    Desc = "Keybind to open UI",
+    Value = "G",
+    Callback = function(v)
+        Window:SetToggleKey(Enum.KeyCode[v])
+    end
+})
+
+SettingsTab:Button({
+	Title = "Rejoin Server",
+	Callback = function()
+		Rejoin()
+	end,
+})
+
+SettingsTab:Button({
+	Title = "Server Hop (New Server)",
+	Callback = function()
+		ServerHop()
+	end,
+})
+
+
+SettingsTab:Button({
+    Title = "Save",
+    Desc = "Save Settings to config",
+    Callback = function()
+        myConfig:Save()
+        NotifySuccess("Config Saved", "Config has been saved!")
+    end
+})
+
+SettingsTab:Button({
+    Title = "Load",
+    Desc = "Loads Settings from config",
+    Callback = function()
+        myConfig:Load()
+        NotifySuccess("Config Loaded", "Config has beed loaded!")
+    end
 })
