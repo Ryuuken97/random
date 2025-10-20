@@ -216,102 +216,21 @@ mt.__namecall = newcclosure(function(self, ...)
 		end
 	end
 
-	-- Panggil fungsi asli jika tidak diblokir oleh Save Mode
+	-- PERHATIKAN: Pengecekan ini penting jika 'oldNamecall' mungkin nil.
+	-- Namun, jika 'oldNamecall' benar-benar nil, seluruh hook namecall
+	-- Anda tidak akan berfungsi dengan benar pada event game lainnya.
 	if oldNamecall then
 		return oldNamecall(self, unpack(args))
 	else
+		-- Jika oldNamecall nil, ini berarti eksekutor Anda bermasalah.
+		-- Jika ini terjadi, event game lain (seperti remote event) akan rusak.
+		-- Beberapa eksekutor yang lebih baru mungkin memerlukan Anda untuk 
+		-- mengembalikan nilai dari 'self' jika 'oldNamecall' tidak ada.
 		return self
 	end
 end)
 
 setreadonly(mt, true)
-
--- =========================================================
--- [ AUTO INVENTORY LOAD FUNCTION ]
--- =========================================================
-
--- !!! GANTI NILAI INI DENGAN PATH YANG BENAR UNTUK GAME ANDA !!!
--- Coba: LocalPlayer:FindFirstChild("PlayerStats")
--- Coba: ReplicatedStorage:FindFirstChild("Modules"):FindFirstChild("InventoryData")
-local INVENTORY_SOURCE = LocalPlayer:FindFirstChild("PlayerStats") -- ASUMSI LOKASI FOLDER DATA
-
-local function LoadAllInventory()
-    TradeFunction.TempTradeList = {}
-    local itemFound = 0
-    
-    if not INVENTORY_SOURCE then
-        NotifyError("Load Failed", "Sumber data inventory tidak ditemukan. Cek INVENTORY_SOURCE.")
-        return false
-    end
-    
-    if INVENTORY_SOURCE:IsA("Folder") or INVENTORY_SOURCE:IsA("Model") then
-        -- SKENARIO 1: Data disimpan dalam FOLDER/INSTANCE di LocalPlayer
-        
-        -- ASUMSI: Sumber berisi sub-folder Category (Fruits, Swords), 
-        -- dan setiap sub-folder berisi item (UUID).
-        for _, categoryFolder in ipairs(INVENTORY_SOURCE:GetChildren()) do
-            local categoryName = categoryFolder.Name
-            
-            -- Hanya proses jika itu folder yang berisi item.
-            if categoryFolder:IsA("Folder") and categoryName ~= "Stats" then -- Filter folder Stats
-                for _, itemInstance in ipairs(categoryFolder:GetChildren()) do
-                    -- ASUMSI: Nama Instance item adalah UUID-nya
-                    local uuid = itemInstance.Name 
-                    
-                    if type(uuid) == "string" and uuid:len() > 0 then
-                        table.insert(TradeFunction.TempTradeList, { 
-                            UUID = uuid, 
-                            Category = categoryName 
-                        })
-                        itemFound = itemFound + 1
-                    end
-                end
-            end
-        end
-
-    elseif INVENTORY_SOURCE:IsA("ModuleScript") then
-        -- SKENARIO 2: Data disimpan dalam MODULESCRIPT
-        local inventoryData
-        local success, data = pcall(require, INVENTORY_SOURCE)
-        
-        if success and type(data) == "table" then
-            inventoryData = data
-            
-            -- ASUMSI STRUKTUR MODULE: { ["CategoryA"] = { [UUID1] = data1, [UUID2] = data2 }, ... }
-            for categoryName, itemTable in pairs(inventoryData) do
-                if type(itemTable) == "table" then
-                    for uuid, itemData in pairs(itemTable) do
-                        if type(uuid) == "string" and uuid:len() > 0 then
-                            table.insert(TradeFunction.TempTradeList, { 
-                                UUID = uuid, 
-                                Category = categoryName 
-                            })
-                            itemFound = itemFound + 1
-                        end
-                    end
-                end
-            end
-        else
-            NotifyError("Load Failed", "Gagal me-require ModuleScript Inventory: " .. tostring(data))
-        end
-
-    else
-        NotifyError("Load Failed", "Sumber data tidak valid (Bukan Folder/ModuleScript).")
-        return false
-    end
-    
-    if itemFound > 0 then
-        NotifySuccess("Inventory Loaded", itemFound .. " items berhasil dimuat untuk Mass Trade.")
-        return true
-    else
-        NotifyWarning("Inventory Loaded", "Sumber ditemukan, tetapi tidak ada item yang dapat diperdagangkan ditemukan.")
-        return false
-    end
-end
-
--- =========================================================
--- [ LOGIKA TRADEALL ]
--- =========================================================
 
 local function TradeAll()
 	if TradeFunction.tradingInProgress then
@@ -393,30 +312,6 @@ local function TradeAll()
 	end)
 end
 
-
--- =========================================================
--- [ UI INTEGRATION: MASS TRADE BUTTONS ]
--- =========================================================
-
-TradeTab:Button({
-	Title = "Load All Inventory (Configured)",
-	Desc = "Mencoba memuat semua item inventaris secara otomatis dari INVENTORY_SOURCE.",
-	Icon = "database",
-	Callback = function()
-		LoadAllInventory()
-	end,
-})
-
-TradeTab:Button({
-	Title = "Clear Saved Items List",
-	Desc = "Hapus semua item yang tersimpan di Mass Trade List.",
-	Icon = "x",
-	Callback = function()
-		TradeFunction.TempTradeList = {}
-		NotifyInfo("List Cleared", "Mass Trade List telah dikosongkan.")
-	end,
-})
-
 TradeTab:Toggle({
 	Title = "Auto Trade (Mass Trade)",
 	Desc = "Trade all saved items automatically",
@@ -425,7 +320,7 @@ TradeTab:Toggle({
 		TradeFunction.AutoTrade = state
 		if TradeFunction.AutoTrade then
 			if #TradeFunction.TempTradeList == 0 then
-				NotifyError("Mass Trade", "No items saved! Klik 'Load All Inventory' atau gunakan 'Mode Save Items'.")
+				NotifyError("Mass Trade", "No items saved to trade! Enable 'Mode Save Items' and click items first.")
 				TradeFunction.AutoTrade = false
 				return
 			end
