@@ -177,7 +177,7 @@ TradeTab:Toggle({
 			TradeFunction.TempTradeList = {}
 			NotifySuccess("Save Mode", "Enabled - Click items to save")
 		else
-			NotifyInfo("Save Mode", "Disabled - " .. #TradeFunction.TempTradeList .. " items saved")
+			NotifyInfo("Save Mode", "Disabled")
 		end
 	end,
 })
@@ -199,37 +199,36 @@ mt.__namecall = newcclosure(function(self, ...)
 		if TradeFunction.saveTempMode then
 			if uuid and categoryName then
 				table.insert(TradeFunction.TempTradeList, { UUID = uuid, Category = categoryName })
-				NotifyInfo("Item Saved", "Item added to Mass Trade list.")
 			end
 			return nil -- Blokir event EquipItem agar tidak equip item
 
-		-- Mode Trade Original (Mengirim Trade DAN Meng-equip)
+		-- Mode Trade Original (Meng-equip DULU, baru Mengirim Trade)
 		elseif TradeFunction.onTrade then
 			
 			if uuid and TradeFunction.targetUserId and categoryName then
-				-- 1. KIRIM TRADE
-				InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
-				local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
-				local targetName = targetPlayer and targetPlayer.DisplayName or tostring(TradeFunction.targetUserId)
-				NotifySuccess("Trade Sent", "Trade sent to " .. targetName .. ".")
-
-				-- 2. PANGGIL EVENT EQUIP SECARA MANUAL
+				
+				-- 1. PANGGIL EVENT EQUIP SECARA MANUAL (Dilakukan DULU)
 				-- Kita menggunakan RemoteEvent yang sama (REEquipItem) yang sudah kita definisikan
 				-- di atas, dan memanggilnya dengan argumen aslinya.
 				task.spawn(function()
-					-- Beri waktu sedikit (misalnya 0.1 detik) agar trade event terkirim duluan,
-					-- meskipun tidak selalu diperlukan.
-					task.wait(0.1) 
-					
 					-- PANGGIL FIRESERVER ASLI untuk equip item
 					REEquipItem:FireServer(uuid, categoryName)
+					
+					-- Beri waktu sedikit (misalnya 0.1 detik) agar proses equip selesai/terdeteksi.
+					task.wait(0.1)
+					
+					-- 2. KIRIM TRADE (Dilakukan KEMUDIAN)
+					InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
+					local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
+					local targetName = targetPlayer and targetPlayer.DisplayName or tostring(TradeFunction.targetUserId)
+					NotifySuccess("Trade Sent", "Trade sent to " .. targetName .. ".")
 				end)
 				
 				-- Kita tetap memblokir oldNamecall agar tidak terjadi pemanggilan ganda (double call)
 				-- yang mungkin terjadi karena hook ini.
 			end
 			
-			return nil 
+			return nil 
 		end
 	end
 
