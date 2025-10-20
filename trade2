@@ -193,41 +193,50 @@ mt.__namecall = newcclosure(function(self, ...)
 
 	if tostring(self) == "RE/EquipItem" and method == "FireServer" then
 		
+		local uuid, categoryName = args[1], args[2]
+
 		-- Mode Save Items (DIBLOKIR)
 		if TradeFunction.saveTempMode then
-			local uuid, categoryName = args[1], args[2]
 			if uuid and categoryName then
 				table.insert(TradeFunction.TempTradeList, { UUID = uuid, Category = categoryName })
+				NotifyInfo("Item Saved", "Item added to Mass Trade list.")
 			end
 			return nil -- Blokir event EquipItem agar tidak equip item
 
-		-- Mode Trade Original (TIDAK DIBLOKIR, biarkan item ter-equip)
+		-- Mode Trade Original (Mengirim Trade DAN Meng-equip)
 		elseif TradeFunction.onTrade then
-			local uuid = args[1]
-			local categoryName = args[2] 
 			
 			if uuid and TradeFunction.targetUserId and categoryName then
+				-- 1. KIRIM TRADE
 				InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
 				local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
 				local targetName = targetPlayer and targetPlayer.DisplayName or tostring(TradeFunction.targetUserId)
 				NotifySuccess("Trade Sent", "Trade sent to " .. targetName .. ".")
-			else
-				NotifyError("Trade Error", "Invalid target or item.")
+
+				-- 2. PANGGIL EVENT EQUIP SECARA MANUAL
+				-- Kita menggunakan RemoteEvent yang sama (REEquipItem) yang sudah kita definisikan
+				-- di atas, dan memanggilnya dengan argumen aslinya.
+				task.spawn(function()
+					-- Beri waktu sedikit (misalnya 0.1 detik) agar trade event terkirim duluan,
+					-- meskipun tidak selalu diperlukan.
+					task.wait(0.1) 
+					
+					-- PANGGIL FIRESERVER ASLI untuk equip item
+					REEquipItem:FireServer(uuid, categoryName)
+				end)
+				
+				-- Kita tetap memblokir oldNamecall agar tidak terjadi pemanggilan ganda (double call)
+				-- yang mungkin terjadi karena hook ini.
 			end
-			-- JANGAN return nil di sini. Lanjutkan ke oldNamecall di bawah.
+			
+			return nil 
 		end
 	end
 
-	-- PERHATIKAN: Pengecekan ini penting jika 'oldNamecall' mungkin nil.
-	-- Namun, jika 'oldNamecall' benar-benar nil, seluruh hook namecall
-	-- Anda tidak akan berfungsi dengan benar pada event game lainnya.
+	-- Panggil fungsi asli untuk semua event lain atau jika tidak dalam mode kustom.
 	if oldNamecall then
 		return oldNamecall(self, unpack(args))
 	else
-		-- Jika oldNamecall nil, ini berarti eksekutor Anda bermasalah.
-		-- Jika ini terjadi, event game lain (seperti remote event) akan rusak.
-		-- Beberapa eksekutor yang lebih baru mungkin memerlukan Anda untuk 
-		-- mengembalikan nilai dari 'self' jika 'oldNamecall' tidak ada.
 		return self
 	end
 end)
