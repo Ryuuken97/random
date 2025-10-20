@@ -195,25 +195,35 @@ mt.__namecall = newcclosure(function(self, ...)
 	local method = getnamecallmethod()
 
 	if tostring(self) == "RE/EquipItem" and method == "FireServer" then
-		-- Mode Save Items
+		-- Mode Save Items (TETAP DIBLOKIR)
 		if TradeFunction.saveTempMode then
 			local uuid, categoryName = args[1], args[2]
 			if uuid and categoryName then
 				table.insert(TradeFunction.TempTradeList, { UUID = uuid, Category = categoryName })
 			end
-			return nil -- Blokir event EquipItem agar tidak equip item
+			return nil -- Blokir event EquipItem agar tidak equip item saat menyimpan
 
-		-- Mode Trade Original
+		-- Mode Trade Original (TIDAK DIBLOKIR)
 		elseif TradeFunction.onTrade then
 			local uuid = args[1]
-			if uuid and TradeFunction.targetUserId then
-				-- Perlu pastikan kategori dikirim juga, atau InvokeServer akan gagal
-				local categoryName = args[2] -- Ambil kategori jika tersedia (tergantung game)
+			local categoryName = args[2] -- Ambil kategori
+
+			if uuid and TradeFunction.targetUserId and categoryName then
+				-- Kirim trade request
 				InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
-				NotifySuccess("Trade Sent", "Trade sent to " .. TradeFunction.targetUserId)
+				-- Di sini, ID yang dikirim adalah UserID target, bukan nama.
+				local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
+				local targetName = targetPlayer and targetPlayer.DisplayName or tostring(TradeFunction.targetUserId)
+				NotifySuccess("Trade Sent", "Trade sent to " .. targetName .. ".")
 			else
 				NotifyError("Trade Error", "Invalid target or item.")
 			end
+			
+			-- !!! CATATAN PERUBAHAN UTAMA !!!
+			-- HAPUS 'return nil' DI SINI.
+			-- Dengan demikian, kode akan lanjut ke 'return oldNamecall(self, unpack(args))'
+			-- di akhir fungsi, yang akan mengeksekusi EquipItem:FireServer yang asli.
+		end
 	end
 
 	return oldNamecall(self, unpack(args))
