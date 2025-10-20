@@ -214,7 +214,6 @@ mt.__namecall = newcclosure(function(self, ...)
 			else
 				NotifyError("Trade Error", "Invalid target or item.")
 			end
-		end
 	end
 
 	return oldNamecall(self, unpack(args))
