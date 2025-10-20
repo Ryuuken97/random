@@ -75,10 +75,7 @@ local TradeTab = Window:Tab({
 	Icon = "handshake",
 })
 
-local FishTab = Window:Tab({
-	Title = "Auto Fishing",
-	Icon = "fish"
-})
+Window:SelectTab(1)
 
 -- =========================================================
 -- [ TELEPORT FUNCTION ]
@@ -195,31 +192,53 @@ mt.__namecall = newcclosure(function(self, ...)
 	local method = getnamecallmethod()
 
 	if tostring(self) == "RE/EquipItem" and method == "FireServer" then
-		-- Mode Save Items
+		
+		local uuid, categoryName = args[1], args[2]
+
+		-- Mode Save Items (DIBLOKIR)
 		if TradeFunction.saveTempMode then
-			local uuid, categoryName = args[1], args[2]
 			if uuid and categoryName then
 				table.insert(TradeFunction.TempTradeList, { UUID = uuid, Category = categoryName })
-				NotifySuccess("Save Mode", "Added item: " .. uuid .. " (" .. categoryName .. ")")
+				NotifyInfo("Item Saved", "Item added to Mass Trade list.")
 			end
 			return nil -- Blokir event EquipItem agar tidak equip item
 
-		-- Mode Trade Original
+		-- Mode Trade Original (Mengirim Trade DAN Meng-equip)
 		elseif TradeFunction.onTrade then
-			local uuid = args[1]
-			if uuid and TradeFunction.targetUserId then
-				-- Perlu pastikan kategori dikirim juga, atau InvokeServer akan gagal
-				local categoryName = args[2] -- Ambil kategori jika tersedia (tergantung game)
+			
+			if uuid and TradeFunction.targetUserId and categoryName then
+				-- 1. KIRIM TRADE
 				InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
-				NotifySuccess("Trade Sent", "Trade sent to " .. TradeFunction.targetUserId)
-			else
-				NotifyError("Trade Error", "Invalid target or item.")
+				local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
+				local targetName = targetPlayer and targetPlayer.DisplayName or tostring(TradeFunction.targetUserId)
+				NotifySuccess("Trade Sent", "Trade sent to " .. targetName .. ".")
+
+				-- 2. PANGGIL EVENT EQUIP SECARA MANUAL
+				-- Kita menggunakan RemoteEvent yang sama (REEquipItem) yang sudah kita definisikan
+				-- di atas, dan memanggilnya dengan argumen aslinya.
+				task.spawn(function()
+					-- Beri waktu sedikit (misalnya 0.1 detik) agar trade event terkirim duluan,
+					-- meskipun tidak selalu diperlukan.
+					task.wait(0.1) 
+					
+					-- PANGGIL FIRESERVER ASLI untuk equip item
+					REEquipItem:FireServer(uuid, categoryName)
+				end)
+				
+				-- Kita tetap memblokir oldNamecall agar tidak terjadi pemanggilan ganda (double call)
+				-- yang mungkin terjadi karena hook ini.
 			end
-			return nil -- Blokir event EquipItem agar tidak equip item
+			
+			return nil 
 		end
 	end
 
-	return oldNamecall(self, unpack(args))
+	-- Panggil fungsi asli untuk semua event lain atau jika tidak dalam mode kustom.
+	if oldNamecall then
+		return oldNamecall(self, unpack(args))
+	else
+		return self
+	end
 end)
 
 setreadonly(mt, true)
