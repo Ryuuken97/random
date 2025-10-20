@@ -1,3 +1,190 @@
+-- =========================================================
+-- [ DEPENDENCIES & VARIABLES ]
+-- =========================================================
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+local workspace = game:GetService("Workspace")
+
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local net = ReplicatedStorage:WaitForChild("Packages")
+	:WaitForChild("_Index")
+	:WaitForChild("sleitnick_net@0.2.0")
+	:WaitForChild("net")
+
+-- =========================================================
+-- [ NOTIFICATION FUNCTIONS ]
+-- =========================================================
+
+local function NotifySuccess(title, message, duration)
+	WindUI:Notify({
+		Title = title,
+		Content = message,
+		Duration = duration or 3,
+		Icon = "circle-check",
+	})
+end
+
+local function NotifyError(title, message, duration)
+	WindUI:Notify({
+		Title = title,
+		Content = message,
+		Duration = duration or 3,
+		Icon = "ban",
+	})
+end
+
+local function NotifyInfo(title, message, duration)
+	WindUI:Notify({
+		Title = title,
+		Content = message,
+		Duration = duration or 3,
+		Icon = "info",
+	})
+end
+
+local function NotifyWarning(title, message, duration)
+	WindUI:Notify({
+		Title = title,
+		Content = message,
+		Duration = duration or 3,
+		Icon = "triangle-alert",
+	})
+end
+
+-- =========================================================
+-- [ UI SETUP ]
+-- =========================================================
+
+local Window = WindUI:CreateWindow({
+	Title = "Trade & Teleport",
+	Icon = "hop",
+	Author = "by dio",
+	Size = UDim2.fromOffset(400, 450), -- Ukuran diperbesar sedikit
+	Transparent = true,
+	Theme = "Dark",
+})
+
+Window:SetToggleKey(Enum.KeyCode.G)
+
+local TradeTab = Window:Tab({
+	Title = "Trade",
+	Icon = "handshake",
+})
+
+local FishTab = Window:Tab({
+	Title = "Auto Fishing",
+	Icon = "fish"
+})
+
+-- =========================================================
+-- [ TELEPORT FUNCTION ]
+-- =========================================================
+
+local function teleportToPlayerExact(targetPlayer)
+	local targetChar = targetPlayer.Character
+	local myChar = LocalPlayer.Character
+
+	if targetChar and myChar then
+		local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+		local myHRP = myChar:FindFirstChild("HumanoidRootPart")
+		if targetHRP and myHRP then
+			-- Teleport 2 studs di depan target
+			myHRP.CFrame = targetHRP.CFrame * CFrame.new(0, 0, -2)
+			NotifySuccess("Teleport Successfully", "Successfully Teleported to " .. targetPlayer.DisplayName .. "!", 3)
+			return true
+		end
+	end
+	NotifyError("Teleport Failed", "Target player character or HRP not found.", 3)
+	return false
+end
+
+-- =========================================================
+-- [ TRADING FUNCTIONS & VARIABLES ]
+-- =========================================================
+
+local TradeFunction = {
+	TempTradeList = {},
+	saveTempMode = false,
+	onTrade = false,
+	targetUserId = nil,
+	tradingInProgress = false,
+	autoAcceptTrade = false,
+	AutoTrade = false,
+}
+
+local REEquipItem = net["RE/EquipItem"]
+local RFAwaitTradeResponse = net["RF/AwaitTradeResponse"]
+local InitiateTrade = net["RF/InitiateTrade"]
+
+local function getPlayerListWithNone()
+	local list = { "None" } -- Nilai default
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer then
+			table.insert(list, player.DisplayName .. " (" .. player.Name .. ")")
+		end
+	end
+	return list
+end
+
+local TradeTargetDropdown = TradeTab:Dropdown({
+	Title = "Select Target (Trade/Teleport)",
+	Values = getPlayerListWithNone(),
+	Value = "None", -- Default None
+	Callback = function(selected)
+		if selected == "None" then
+			TradeFunction.targetUserId = nil
+			NotifyInfo("Target Cleared", "Trade target has been set to None.")
+			return
+		end
+
+		local username = selected:match("%((.-)%)")
+		local player = Players:FindFirstChild(username)
+
+		if player then
+			-- Fitur Teleportasi
+			if teleportToPlayerExact(player) then
+				-- Jika teleport berhasil, set juga untuk target trade
+				TradeFunction.targetUserId = player.UserId
+			else
+				TradeFunction.targetUserId = nil
+				NotifyError("Action Failed", "Could not teleport to or set target for trade.")
+			end
+		else
+			TradeFunction.targetUserId = nil
+			NotifyError("Player Target", "Player not found!")
+		end
+	end,
+})
+
+local function refreshDropdown()
+	local updatedList = getPlayerListWithNone()
+	TradeTargetDropdown:Refresh(updatedList)
+end
+
+Players.PlayerAdded:Connect(refreshDropdown)
+Players.PlayerRemoving:Connect(refreshDropdown)
+
+refreshDropdown()
+
+TradeTab:Toggle({
+	Title = "Mode Save Items",
+	Desc = "Click inventory item to add for Mass Trade",
+	Value = false,
+	Callback = function(state)
+		TradeFunction.saveTempMode = state
+		if state then
+			TradeFunction.TempTradeList = {}
+			NotifySuccess("Save Mode", "Enabled - Click items to save")
+		else
+			NotifyInfo("Save Mode", "Disabled - " .. #TradeFunction.TempTradeList .. " items saved")
+		end
+	end,
+})
+
 -- Namecall hook untuk mendeteksi klik item
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
@@ -14,32 +201,160 @@ mt.__namecall = newcclosure(function(self, ...)
 			if uuid and categoryName then
 				table.insert(TradeFunction.TempTradeList, { UUID = uuid, Category = categoryName })
 			end
-			-- Blokir event EquipItem agar tidak equip item saat menyimpan
-			return nil 
+			return nil -- Blokir event EquipItem agar tidak equip item
 
-		-- Mode Trade Original (Single Item)
+		-- Mode Trade Original
 		elseif TradeFunction.onTrade then
 			local uuid = args[1]
-			local categoryName = args[2] -- Ambil kategori
-			
-			if uuid and TradeFunction.targetUserId and categoryName then
-				-- Kirim trade
+			if uuid and TradeFunction.targetUserId then
+				-- Perlu pastikan kategori dikirim juga, atau InvokeServer akan gagal
+				local categoryName = args[2] -- Ambil kategori jika tersedia (tergantung game)
 				InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
-				NotifySuccess("Trade Sent", "Trade sent to target.")
+				NotifySuccess("Trade Sent", "Trade sent to " .. TradeFunction.targetUserId)
 			else
 				NotifyError("Trade Error", "Invalid target or item.")
 			end
-			-- Blokir event EquipItem agar tidak equip item saat mengirim trade
-			return nil 
 		end
-		
-		-- JIKA BUKAN TradeFunction.saveTempMode DAN BUKAN TradeFunction.onTrade, 
-		-- maka lewati ke fungsi aslinya.
 	end
 
-	-- Panggil fungsi aslinya untuk semua kasus lain, termasuk EquipItem 
-	-- yang tidak masuk ke kondisi TradeFunction.saveTempMode atau TradeFunction.onTrade.
 	return oldNamecall(self, unpack(args))
 end)
 
 setreadonly(mt, true)
+
+local function TradeAll()
+	if TradeFunction.tradingInProgress then
+		NotifyWarning("Mass Trade", "Trade already in progress!")
+		return
+	end
+	if not TradeFunction.targetUserId then
+		NotifyError("Mass Trade", "Set trade target first!")
+		return
+	end
+	if #TradeFunction.TempTradeList == 0 then
+		NotifyWarning("Mass Trade", "No items saved!")
+		return
+	end
+
+	TradeFunction.tradingInProgress = true
+	NotifyInfo("Mass Trade", "Starting trade of " .. #TradeFunction.TempTradeList .. " items...")
+
+	task.spawn(function()
+		local successCount = 0
+		for i, item in ipairs(TradeFunction.TempTradeList) do
+			if not TradeFunction.AutoTrade then
+				NotifyWarning("Mass Trade", "Auto Trade stopped manually!")
+				break
+			end
+
+			local uuid = item.UUID
+			local category = item.Category
+
+			NotifyInfo("Mass Trade", "Trade item " .. i .. " of " .. #TradeFunction.TempTradeList)
+
+			-- Kirim trade request
+			InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, category)
+
+			-- Tunggu notifikasi "Trade completed!"
+			local tradeCompleted = false
+			local timeout = 10
+			local elapsed = 0
+
+			local notifGui = LocalPlayer.PlayerGui:WaitForChild("Text Notifications")
+			local connection
+
+			connection = notifGui.Frame.ChildAdded:Connect(function(child)
+				task.wait(0.5)
+				local header = child:FindFirstChild("Header")
+				if header and header:IsA("TextLabel") and header.Text == "Trade completed!" then
+					tradeCompleted = true
+				end
+			end)
+
+			repeat
+				task.wait(0.2)
+				elapsed += 0.2
+			until tradeCompleted or elapsed >= timeout
+
+			if connection then
+				connection:Disconnect()
+			end
+
+			if tradeCompleted then
+				successCount += 1
+				NotifySuccess(
+					"Mass Trade",
+					"Success " .. i .. " of " .. #TradeFunction.TempTradeList .. ". Waiting for next..."
+				)
+				task.wait(6.5) -- Cooldown antar trade
+			else
+				NotifyWarning("Mass Trade", "Trade timeout/failed for item " .. i .. ". Proceeding...")
+				task.wait(2)
+			end
+		end
+
+		NotifySuccess(
+			"Mass Trade",
+			"Finished trading! Total success: " .. successCount .. "/" .. #TradeFunction.TempTradeList
+		)
+		TradeFunction.tradingInProgress = false
+		TradeFunction.TempTradeList = {} -- Hapus daftar setelah selesai
+	end)
+end
+
+TradeTab:Toggle({
+	Title = "Auto Trade (Mass Trade)",
+	Desc = "Trade all saved items automatically",
+	Value = false,
+	Callback = function(state)
+		TradeFunction.AutoTrade = state
+		if TradeFunction.AutoTrade then
+			if #TradeFunction.TempTradeList == 0 then
+				NotifyError("Mass Trade", "No items saved to trade! Enable 'Mode Save Items' and click items first.")
+				TradeFunction.AutoTrade = false
+				return
+			end
+			TradeAll()
+			NotifySuccess("Mass Trade", "Auto Trade Enabled")
+		else
+			NotifyWarning("Mass Trade", "Auto Trade Disabled")
+		end
+	end,
+})
+
+TradeTab:Toggle({
+	Title = "Trade (Single Item)",
+	Desc = "Click an inventory item to send trade instantly",
+	Value = false,
+	Callback = function(state)
+		TradeFunction.onTrade = state
+		if state then
+			NotifySuccess("Trade", "Single Item Trade Mode Enabled. Select a target and click an item.")
+		else
+			NotifyWarning("Trade", "Single Item Trade Mode Disabled.")
+		end
+	end,
+})
+
+-- Hooking RFAwaitTradeResponse untuk Auto Accept
+RFAwaitTradeResponse.OnClientInvoke = function(fromPlayer, timeNow)
+	if TradeFunction.autoAcceptTrade then
+		return true -- Mengembalikan true akan secara otomatis menerima trade
+	else
+		return nil
+	end
+end
+
+TradeTab:Toggle({
+	Title = "Auto Accept Trade",
+	Desc = "Automatically accept incoming trade requests",
+	Value = false,
+	Callback = function(state)
+		TradeFunction.autoAcceptTrade = state
+		if state then
+			NotifySuccess("Auto Accept Trade", "Enabled")
+		else
+			NotifyWarning("Auto Accept Trade", "Disabled")
+		end
+	end,
+})
