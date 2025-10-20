@@ -206,7 +206,7 @@ mt.__namecall = newcclosure(function(self, ...)
 		-- Mode Trade Single Item (IZINKAN Equip, KIRIM Trade)
 		elseif TradeFunction.onTrade then
 			
-			if uuid and TradeFunction.targetUserId and categoryName then
+			if uuid and categoryName and TradeFunction.targetUserId then
 				
 				local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
 				local targetName = targetPlayer and targetPlayer.DisplayName or tostring(TradeFunction.targetUserId)
