@@ -190,6 +190,16 @@ mt.__namecall = newcclosure(function(self, ...)
 	local args = { ... }
 	local method = getnamecallmethod()
 
+	-- Fungsi untuk memanggil oldNamecall dengan aman
+	local function safeCallNamecall()
+		if oldNamecall then
+			return oldNamecall(self, unpack(args))
+		else
+			-- Jika oldNamecall nil, kembalikan self agar tidak crash
+			return self 
+		end
+	end
+
 	-- Periksa apakah remote yang dipanggil adalah RE/EquipItem:FireServer
 	if tostring(self) == "RE/EquipItem" and method == "FireServer" then
 		
@@ -200,49 +210,46 @@ mt.__namecall = newcclosure(function(self, ...)
 			if uuid and categoryName then
 				table.insert(TradeFunction.TempTradeList, { UUID = uuid, Category = categoryName })
 			end
-			-- Blokir panggilan FireServer asli
-			return nil 
+			return nil 
 
 		-- Mode Trade Single Item (IZINKAN Equip, KIRIM Trade)
 		elseif TradeFunction.onTrade then
 			
+			-- Tambahkan pengecekan InitiateTrade di sini juga agar lebih aman
+			if not InitiateTrade then
+				NotifyError("Trade Failed", "InitiateTrade remote is missing!")
+				return safeCallNamecall()
+			end
+
+			-- Pengecekan apakah data dan target valid
 			if uuid and categoryName and TradeFunction.targetUserId then
 				
 				local targetPlayer = Players:GetPlayerByUserId(TradeFunction.targetUserId)
 				local targetName = targetPlayer and targetPlayer.DisplayName or tostring(TradeFunction.targetUserId)
 
 				-- 1. IZINKAN PANGGILAN Equip ASLI (item akan di-equip)
-				local result = oldNamecall(self, unpack(args))
+				local result = safeCallNamecall()
 				
 				-- 2. KIRIM TRADE SETELAH ITEM DI-EQUIP
 				task.spawn(function()
-					-- Jeda singkat untuk memastikan server memproses equip
-					task.wait(0.2)  
+					task.wait(0.2)  
 					
-					if InitiateTrade then
-						InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
-						NotifySuccess("Trade Sent", "Trade sent to " .. targetName .. " after equipping.")
-					else
-						NotifyError("Trade Failed", "InitiateTrade RemoteFunction is missing!")
-					end
+					-- InitiateTrade sudah dipastikan ada di atas
+					InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
+					NotifySuccess("Trade Sent", "Trade sent to " .. targetName .. " after equipping.")
 				end)
 				
-				-- Kembalikan hasil dari panggilan asli (penting agar script game tidak crash)
 				return result
 
 			else
-				-- Jika TradeTarget belum dipilih, biarkan equip item tetap berjalan
-				return oldNamecall(self, unpack(args))
+				-- Jika Target belum dipilih atau data tidak valid, biarkan equip item tetap berjalan
+				return safeCallNamecall()
 			end
 		end
 	end
 
 	-- Panggil fungsi asli untuk semua event lain atau jika tidak dalam mode kustom.
-	if oldNamecall then
-		return oldNamecall(self, unpack(args))
-	else
-		return self
-	end
+	return safeCallNamecall()
 end)
 
 setreadonly(mt, true)
