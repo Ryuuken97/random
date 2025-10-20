@@ -177,7 +177,7 @@ TradeTab:Toggle({
 			TradeFunction.TempTradeList = {}
 			NotifySuccess("Save Mode", "Enabled - Click items to save")
 		else
-			NotifyInfo("Save Mode", "Disabled - " .. #TradeFunction.TempTradeList .. " items saved")
+			NotifyInfo("Save Mode", "Disabled")
 		end
 	end,
 })
