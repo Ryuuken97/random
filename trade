@@ -199,7 +199,6 @@ mt.__namecall = newcclosure(function(self, ...)
 		if TradeFunction.saveTempMode then
 			if uuid and categoryName then
 				table.insert(TradeFunction.TempTradeList, { UUID = uuid, Category = categoryName })
-				NotifyInfo("Item Saved", "Item added to Mass Trade list.")
 			end
 			return nil -- Blokir event EquipItem agar tidak equip item
 
