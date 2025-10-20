@@ -75,6 +75,8 @@ local TradeTab = Window:Tab({
 	Icon = "handshake",
 })
 
+Window:SelectTab(1)
+
 -- =========================================================
 -- [ TELEPORT FUNCTION ]
 -- =========================================================
@@ -202,7 +204,7 @@ mt.__namecall = newcclosure(function(self, ...)
 		-- Mode Trade Original (TIDAK DIBLOKIR, biarkan item ter-equip)
 		elseif TradeFunction.onTrade then
 			local uuid = args[1]
-			local categoryName = args[2] 
+			local categoryName = args[2] 
 			
 			if uuid and TradeFunction.targetUserId and categoryName then
 				InitiateTrade:InvokeServer(TradeFunction.targetUserId, uuid, categoryName)
@@ -224,7 +226,7 @@ mt.__namecall = newcclosure(function(self, ...)
 	else
 		-- Jika oldNamecall nil, ini berarti eksekutor Anda bermasalah.
 		-- Jika ini terjadi, event game lain (seperti remote event) akan rusak.
-		-- Beberapa eksekutor yang lebih baru mungkin memerlukan Anda untuk 
+		-- Beberapa eksekutor yang lebih baru mungkin memerlukan Anda untuk 
 		-- mengembalikan nilai dari 'self' jika 'oldNamecall' tidak ada.
 		return self
 	end
