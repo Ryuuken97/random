@@ -45,7 +45,7 @@ local equipBrainrotsInterval = 60
 local antiAfkEnabled = false
 local reconnectEnabled = false
 
--- selected items
+-- selected
 local selectedSeeds = {}
 local selectedGears = {}
 
@@ -55,7 +55,7 @@ local Rayfield = loadstring(game:HttpGet(
 
 local Window = Rayfield:CreateWindow({
     Name = "RystHub",
-    Icon = "sparkles",
+    Icon = "sparkles", -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
     LoadingTitle = "RystHub",
     LoadingSubtitle = "by Ryuuken",
     ShowText = "RystHub",
@@ -75,6 +75,10 @@ local MiscTab = Window:CreateTab("Misc", "cog")
 -- // === Auto Buy Seeds === //
 BuyTab:CreateSection("Auto Buy Seeds")
 
+local seedsLock = false
+local ToggleBuySelectedSeeds
+local ToggleBuyAllSeeds
+
 BuyTab:CreateDropdown({
     Name = "Select Seeds",
     Options = seedList,
@@ -86,43 +90,51 @@ BuyTab:CreateDropdown({
     end,
 })
 
-BuyTab:CreateToggle({
+ToggleBuySelectedSeeds = BuyTab:CreateToggle({
     Name = "Buy Selected Seeds",
     CurrentValue = false,
     Flag = "BuySelectedSeeds",
-    Callback = function()
-        -- turn off Buy All when this is toggled
-        if buyingSeedsActive then
+    Callback = function(state)
+        if seedsLock then return end
+        seedsLock = true
+
+        buyingSelectedSeedsActive = state
+        if state then
             buyingSeedsActive = false
-            Rayfield.Flags["BuyAllSeeds"]:Set(false)
+            ToggleBuyAllSeeds:Set(false) -- turn off "Buy All"
         end
 
-        buyingSelectedSeedsActive = not buyingSelectedSeedsActive
         Rayfield:Notify({
             Title = "Auto Buy Seeds",
-            Content = buyingSelectedSeedsActive and "Started buying selected seeds" or "Stopped buying selected seeds",
+            Content = state and "Started buying selected seeds" or "Stopped buying selected seeds",
             Duration = 3
         })
+
+        seedsLock = false
     end,
 })
 
-BuyTab:CreateToggle({
+ToggleBuyAllSeeds = BuyTab:CreateToggle({
     Name = "Buy All Seeds",
     CurrentValue = false,
     Flag = "BuyAllSeeds",
-    Callback = function()
-        -- turn off Buy Selected when this is toggled
-        if buyingSelectedSeedsActive then
+    Callback = function(state)
+        if seedsLock then return end
+        seedsLock = true
+
+        buyingSeedsActive = state
+        if state then
             buyingSelectedSeedsActive = false
-            Rayfield.Flags["BuySelectedSeeds"]:Set(false)
+            ToggleBuySelectedSeeds:Set(false) -- turn off "Buy Selected"
         end
 
-        buyingSeedsActive = not buyingSeedsActive
         Rayfield:Notify({
             Title = "Auto Buy Seeds",
-            Content = buyingSeedsActive and "Started buying all seeds" or "Stopped buying all seeds",
+            Content = state and "Started buying all seeds" or "Stopped buying all seeds",
             Duration = 3
         })
+
+        seedsLock = false
     end,
 })
 
@@ -153,6 +165,10 @@ end)
 -- // === Auto Buy Gears === //
 BuyTab:CreateSection("Auto Buy Gears")
 
+local gearsLock = false
+local ToggleBuySelectedGears
+local ToggleBuyAllGears
+
 BuyTab:CreateDropdown({
     Name = "Select Gears",
     Options = gearList,
@@ -164,43 +180,51 @@ BuyTab:CreateDropdown({
     end,
 })
 
-BuyTab:CreateToggle({
+ToggleBuySelectedGears = BuyTab:CreateToggle({
     Name = "Buy Selected Gears",
     CurrentValue = false,
     Flag = "BuySelectedGears",
-    Callback = function()
-        -- turn off Buy All when this is toggled
-        if buyingGearsActive then
+    Callback = function(state)
+        if gearsLock then return end
+        gearsLock = true
+
+        buyingSelectedGearsActive = state
+        if state then
             buyingGearsActive = false
-            Rayfield.Flags["BuyAllGears"]:Set(false)
+            ToggleBuyAllGears:Set(false) -- turn off "Buy All"
         end
 
-        buyingSelectedGearsActive = not buyingSelectedGearsActive
         Rayfield:Notify({
             Title = "Auto Buy Gears",
-            Content = buyingSelectedGearsActive and "Started buying selected gears" or "Stopped buying selected gears",
+            Content = state and "Started buying selected gears" or "Stopped buying selected gears",
             Duration = 3
         })
+
+        gearsLock = false
     end
 })
 
-BuyTab:CreateToggle({
+ToggleBuyAllGears = BuyTab:CreateToggle({
     Name = "Buy All Gears",
     CurrentValue = false,
     Flag = "BuyAllGears",
-    Callback = function()
-        -- turn off Buy Selected when this is toggled
-        if buyingSelectedGearsActive then
+    Callback = function(state)
+        if gearsLock then return end
+        gearsLock = true
+
+        buyingGearsActive = state
+        if state then
             buyingSelectedGearsActive = false
-            Rayfield.Flags["BuySelectedGears"]:Set(false)
+            ToggleBuySelectedGears:Set(false) -- turn off "Buy Selected"
         end
 
-        buyingGearsActive = not buyingGearsActive
         Rayfield:Notify({
             Title = "Auto Buy Gears",
-            Content = buyingGearsActive and "Started buying all gears" or "Stopped buying all gears",
+            Content = state and "Started buying all gears" or "Stopped buying all gears",
             Duration = 3
         })
+
+        gearsLock = false
     end
 })
 
@@ -228,8 +252,8 @@ task.spawn(function()
     end
 end)
 
--- // === Auto Equip Best Brainrots === //
-EquipTab:CreateSection("Auto Equip Brainrots")
+-- // === Equip Best Brainrots === //
+local EquipSection = EquipTab:CreateSection("Auto Equip Brainrots")
 
 EquipTab:CreateInput({
     Name = "Auto Equip Interval (seconds)",
@@ -251,7 +275,7 @@ EquipTab:CreateToggle({
         equipBrainrotsActive = state
         Rayfield:Notify({
             Title = "Auto Equip Best Brainrots",
-            Content = state and "Auto Equip Best Brainrots Enabled" or "Auto Equip Best Brainrots Disabled",
+            Content = state and "Auto Equip Best Brainrots ON" or "Auto Equip Best Brainrots OFF",
             Duration = 3
         })
     end
@@ -301,20 +325,21 @@ MiscTab:CreateToggle({
     Callback = function(state)
         reconnectEnabled = state
         if state then
-            Rayfield:Notify({ Title = "Auto Reconnect", Content = "Enabled", Duration = 3 })
+            Rayfield:Notify({ Title = "Reconnect", Content = "Enabled", Duration = 3 })
             task.spawn(function()
                 while reconnectEnabled do
                     if not game:IsLoaded() then
                         task.wait(5)
                         pcall(function()
-                            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+                            game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId,
+                                LocalPlayer)
                         end)
                     end
                     task.wait(10)
                 end
             end)
         else
-            Rayfield:Notify({ Title = "Auto Reconnect", Content = "Disabled", Duration = 3 })
+            Rayfield:Notify({ Title = "Reconnect", Content = "Disabled", Duration = 3 })
         end
     end
 })
