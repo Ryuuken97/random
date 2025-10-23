@@ -101,14 +101,8 @@ ToggleBuySelectedSeeds = BuyTab:CreateToggle({
         buyingSelectedSeedsActive = state
         if state then
             buyingSeedsActive = false
-            ToggleBuyAllSeeds:Set(false) -- turn off "Buy All"
+            ToggleBuyAllSeeds:Set(false)
         end
-
-        Rayfield:Notify({
-            Title = "Auto Buy Seeds",
-            Content = state and "Started buying selected seeds" or "Stopped buying selected seeds",
-            Duration = 3
-        })
 
         seedsLock = false
     end,
@@ -125,14 +119,8 @@ ToggleBuyAllSeeds = BuyTab:CreateToggle({
         buyingSeedsActive = state
         if state then
             buyingSelectedSeedsActive = false
-            ToggleBuySelectedSeeds:Set(false) -- turn off "Buy Selected"
+            ToggleBuySelectedSeeds:Set(false)
         end
-
-        Rayfield:Notify({
-            Title = "Auto Buy Seeds",
-            Content = state and "Started buying all seeds" or "Stopped buying all seeds",
-            Duration = 3
-        })
 
         seedsLock = false
     end,
@@ -191,14 +179,8 @@ ToggleBuySelectedGears = BuyTab:CreateToggle({
         buyingSelectedGearsActive = state
         if state then
             buyingGearsActive = false
-            ToggleBuyAllGears:Set(false) -- turn off "Buy All"
+            ToggleBuyAllGears:Set(false)
         end
-
-        Rayfield:Notify({
-            Title = "Auto Buy Gears",
-            Content = state and "Started buying selected gears" or "Stopped buying selected gears",
-            Duration = 3
-        })
 
         gearsLock = false
     end
@@ -215,14 +197,8 @@ ToggleBuyAllGears = BuyTab:CreateToggle({
         buyingGearsActive = state
         if state then
             buyingSelectedGearsActive = false
-            ToggleBuySelectedGears:Set(false) -- turn off "Buy Selected"
+            ToggleBuySelectedGears:Set(false)
         end
-
-        Rayfield:Notify({
-            Title = "Auto Buy Gears",
-            Content = state and "Started buying all gears" or "Stopped buying all gears",
-            Duration = 3
-        })
 
         gearsLock = false
     end
@@ -285,7 +261,7 @@ task.spawn(function()
     while task.wait(1) do
         if equipBrainrotsActive then
             pcall(function()
-                ReplicatedStorage.Remotes.EquipBestBrainrotss:FireServer()
+                ReplicatedStorage.Remotes.EquipBestBrainrots:FireServer()
             end)
             task.wait(equipBrainrotsInterval)
         end
