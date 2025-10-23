@@ -235,6 +235,7 @@ EquipTab:CreateInput({
     Name = "Auto Equip Interval (seconds)",
     PlaceholderText = "60",
     RemoveTextAfterFocusLost = false,
+    Flag = "AutoEquipInterval",
     Callback = function(text)
         local num = tonumber(text)
         if num and num > 0 then
