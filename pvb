@@ -1,0 +1,232 @@
+-- // === Services === //
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- // === Utility === //
+local function getSeedsList()
+	local seeds = {}
+	local seedsFolder = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Seeds")
+	local Util = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("Utility"):WaitForChild("Util"))
+
+	for _, seed in ipairs(seedsFolder:GetChildren()) do
+		local seedEntry = Util:GetSeedEntry(seed.Name)
+		if seedEntry and not seedEntry.Hidden then
+			table.insert(seeds, seed.Name)
+		end
+	end
+	table.sort(seeds)
+	return seeds
+end
+
+local function getGearsList()
+	local gears = {}
+	local gearsFolder = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Gears")
+	for _, gear in ipairs(gearsFolder:GetChildren()) do
+		if gear:GetAttribute("Price") then
+			table.insert(gears, gear.Name)
+		end
+	end
+	table.sort(gears)
+	return gears
+end
+
+local gearList = getGearsList()
+local seedList = getSeedsList()
+
+print(("[RystHub] Loaded %d Seeds & %d Gears"):format(#seedList, #gearList))
+
+-- // === Flags === //
+local buyingSeedsActive = false
+local buyingGearsActive = false
+local equipBrainrotsActive = false
+local brainrotInterval = 60
+
+-- // === Rayfield Library === //
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+	Name = "RystHub",
+	Icon = "sparkles",
+	LoadingTitle = "Loading...",
+	LoadingSubtitle = "by Ryuuken",
+	ShowText = "RystHub",
+	DisableRayfieldPrompts = true,
+	ConfigurationSaving = {
+		Enabled = true,
+		FolderName = "RystHub",
+		FileName = "PvB"
+	},
+	KeySystem = false,
+})
+
+-- // === Tabs === //
+local EquipTab = Window:CreateTab("Auto Equip", "repeat")
+local BuyTab = Window:CreateTab("Auto Buy", "shopping-cart")
+local MiscTab = Window:CreateTab("Misc", "cog")
+
+-- // === Auto Buy Seeds === //
+local AutoBuySeedsSection = BuyTab:CreateSection("Auto Buy Seeds")
+
+BuyTab:CreateToggle({
+	Name = "Buy All Seeds",
+	CurrentValue = false,
+	Flag = "BuyAllSeeds",
+	Callback = function()
+		buyingSeedsActive = not buyingSeedsActive
+		Rayfield:Notify({
+			Title = "Auto Buy Seeds",
+			Content = buyingSeedsActive and "Started buying seeds" or "Stopped buying seeds",
+			Duration = 3
+		})
+	end
+})
+
+task.spawn(function()
+	while task.wait(0.1) do
+		if buyingSeedsActive then
+			for _, seed in ipairs(seedList) do
+				if not buyingSeedsActive then break end
+				pcall(function()
+					ReplicatedStorage.Remotes.BuyItem:FireServer(seed, true)
+				end)
+				task.wait(0.1)
+			end
+		end
+	end
+end)
+
+-- // === Auto Buy Gears === //
+local AutoBuyGearsSection = BuyTab:CreateSection("Auto Buy Gears")
+
+BuyTab:CreateToggle({
+	Name = "Buy All Gears",
+	CurrentValue = false,
+	Flag = "BuyAllGears",
+	Callback = function()
+		buyingGearsActive = not buyingGearsActive
+		Rayfield:Notify({
+			Title = "Auto Buy Gears",
+			Content = buyingGearsActive and "Started buying gears" or "Stopped buying gears",
+			Duration = 3
+		})
+	end
+})
+
+task.spawn(function()
+	while task.wait(0.1) do
+		if buyingGearsActive then
+			for _, gear in ipairs(gearList) do
+				if not buyingGearsActive then break end
+				pcall(function()
+					ReplicatedStorage.Remotes.BuyGear:FireServer(gear, true)
+				end)
+				task.wait(0.1)
+			end
+		end
+	end
+end)
+
+-- // === Equip Best Brainrots === //
+local BrainSection = EquipTab:CreateSection("Auto Equip Brainrots")
+
+EquipTab:CreateInput({
+	Name = "Auto Equip Interval (seconds)",
+	PlaceholderText = "60",
+	RemoveTextAfterFocusLost = false,
+	Callback = function(text)
+		local num = tonumber(text)
+		if num and num > 0 then
+			brainrotInterval = num
+		end
+	end
+})
+
+EquipTab:CreateToggle({
+	Name = "Auto Equip Best Brainrots",
+	CurrentValue = false,
+	Flag = "AutoBrainrots",
+	Callback = function(state)
+		equipBrainrotsActive = state
+		Rayfield:Notify({
+			Title = "Brainrots",
+			Content = state and "Auto Equip ON" or "Auto Equip OFF",
+			Duration = 3
+		})
+	end
+})
+
+task.spawn(function()
+	while task.wait(1) do
+		if equipBrainrotsActive then
+			pcall(function()
+				ReplicatedStorage.Remotes.EquipBestBrainrotss:FireServer()
+			end)
+			task.wait(brainrotInterval)
+		end
+	end
+end)
+
+-- // === Misc Tab (Anti AFK + Reconnect) === //
+local VirtualUser = game:GetService("VirtualUser")
+local antiAfkEnabled = false
+local reconnectEnabled = false
+
+MiscTab:CreateSection("System")
+
+MiscTab:CreateToggle({
+	Name = "Anti AFK",
+	CurrentValue = false,
+	Flag = "AntiAFK",
+	Callback = function(state)
+		antiAfkEnabled = state
+		if state then
+			Rayfield:Notify({Title = "Anti AFK", Content = "Enabled", Duration = 3})
+			task.spawn(function()
+				while antiAfkEnabled do
+					task.wait(240)
+					pcall(function()
+						VirtualUser:CaptureController()
+						VirtualUser:ClickButton2(Vector2.new())
+					end)
+				end
+			end)
+		else
+			Rayfield:Notify({Title = "Anti AFK", Content = "Disabled", Duration = 3})
+		end
+	end
+})
+
+MiscTab:CreateToggle({
+	Name = "Auto Reconnect",
+	CurrentValue = false,
+	Flag = "AutoReconnect",
+	Callback = function(state)
+		reconnectEnabled = state
+		if state then
+			Rayfield:Notify({Title = "Reconnect", Content = "Enabled", Duration = 3})
+			task.spawn(function()
+				while reconnectEnabled do
+					if not game:IsLoaded() then
+						task.wait(5)
+						pcall(function()
+							game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, game.JobId, LocalPlayer)
+						end)
+					end
+					task.wait(10)
+				end
+			end)
+		else
+			Rayfield:Notify({Title = "Reconnect", Content = "Disabled", Duration = 3})
+		end
+	end
+})
+
+-- // Done //
+Rayfield:Notify({
+	Title = "Plant vs Brainrots",
+	Content = "RystHub Script Loaded Successfully!",
+	Duration = 5
+})
+
+Rayfield:LoadConfiguration()
